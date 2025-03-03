@@ -27,7 +27,7 @@ Accepted by **CVPR 2025**
 ReVisionLLM is a recursive vision-language model designed to locate events in hour-long videos. Inspired by human search strategies, our model initially targets broad segments of interest, progressively revising its focus to pinpoint exact temporal boundaries. Our model can seamlessly handle videos of vastly different lengths, from minutes to hours. We also introduce a hierarchical training strategy that starts with short clips to capture distinct events and progressively extends to longer videos. ReVisionLLM is the first VLM capable of temporal grounding in hour-long videos.
 
 [//]: # (![framework]&#40;images/main.png&#41;)
-[//]: <img src="method.png" alt="drawing" width="1000"/>
+<img src="method.png" alt="drawing" width="1000"/>
 
 ---
 
