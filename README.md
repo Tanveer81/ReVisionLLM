@@ -105,7 +105,7 @@ sh scripts/mad/stage2_long_100.sh
 
 ## Inference on MAD Dataset:
 ```shell
-bash scripts/mad/eval_loop_stage1_dense.sh
+bash scripts/mad/eval_stage1_dense.sh
 bash scripts/mad/eval_stage2_33.sh
 bash scripts/mad/eval_stage2_100.sh
 python revisionllm/eval/metric_retrieval_forward.py
