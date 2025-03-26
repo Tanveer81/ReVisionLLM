@@ -31,7 +31,7 @@ for dir in $OUT_DIR/checkpoint-*/ ; do
 done
 
 
-deepspeed --master_port $MASTER_PORT vtimellm/train/train_mem.py \
+deepspeed --master_port $MASTER_PORT revisionllm/train/train_mem.py \
     --deepspeed ./scripts/zero3.json \
     --lora_enable True \
     --training_stage 4 \

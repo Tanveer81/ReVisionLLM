@@ -11,7 +11,6 @@
 MODEL_VERSION=vicuna-v1-5-7b
 gpu_vis=0 # per_device_train_batch_size * gradient_accumulation_steps * n_gpus = 128
 MASTER_PORT=$(( ((RANDOM<<15)|RANDOM) % 49152 + 10000 ))
-CHECKPOINT=/nfs/data3/hannan/vtimellm/checkpoints
 WINDOW=500
 FRAMES=250
 OUT_DIR=/checkpoints/chapters_stage1_dense
@@ -30,7 +29,7 @@ for dir in $OUT_DIR/checkpoint-*/ ; do
     fi
 done
 
-deepspeed --master_port $MASTER_PORT vtimellm/train/train_mem.py \
+deepspeed --master_port $MASTER_PORT revisionllm/train/train_mem.py \
     --deepspeed ./scripts/zero3.json \
     --lora_enable True \
     --training_stage 2 \

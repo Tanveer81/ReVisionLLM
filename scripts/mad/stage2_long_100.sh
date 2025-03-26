@@ -32,7 +32,7 @@ done
 
     # --pretrain_mm_mlp_adapter checkpoints/revisionllm-vicuna-v1-5-7b-stage1/mm_projector.bin \
 
-deepspeed --master_port $MASTER_PORT vtimellm/train/train_mem.py \
+deepspeed --master_port $MASTER_PORT revisionllm/train/train_mem.py \
     --deepspeed ./scripts/zero3-alternate.json \
     --lora_enable True \
     --training_stage 4 \
