@@ -75,10 +75,9 @@ def parse_args():
     parser.add_argument("--score_merge", type=str, default='multiply', choices=['add', 'multiply'])
     parser.add_argument("--normalize", type=bool, default=True)
     parser.add_argument("--hierarchy_all", type=bool, default=False)
-    parser.add_argument("--high_res_log_path", type=str,default=None)  # '/home/stud/user/VTimeLLM/checkpoints/BEST-revisionllm-vicuna-v1-5-7b-msrvtt-100-3f-8-fixed_lr1e-4_wrm.03-neg-window-11-b32-g1-e5/new/max_entropy_mul_norm/predictions_streaming_0.txt')
+    parser.add_argument("--high_res_log_path", type=str,default=None)
     parser.add_argument("--single", type=bool, default=True)
     parser.add_argument("--zoom", type=int, default=1)
-    # parser.add_argument("--grounding_path", type=str, default='/home/stud/user/VTimeLLM/checkpoints/revisionllm-vicuna-v1-5-7b-mad-125-250-2f-8-fixed_lr1e-4_wrm.03-neg-window-11-b8-g2-e2-nopretrain-vision-text-clip-adapter_madpretrained_alternate_hierarchy_100/mad_mean_entropy_add_norm_all2')
     parser.add_argument("--grounding_path", type=str, default=None)
     parser.add_argument("--distributed_retrieval", type=int, default=16)
     parser.add_argument("--stride", type=int, default=5)
@@ -87,11 +86,6 @@ def parse_args():
 
 def load_predictions(path):
     global args
-    # if 'user' not in path:
-    #     if 'ego' in path or 'naq' in path:
-    #         path = 'pathvtimellm/checkpointsego/' + path
-    #     else:
-    #         path = 'pathvtimellm/checkpoints/' + path
     paths = []
     if args.distributed_retrieval > 0:
         for i in range(args.distributed_retrieval):
@@ -179,14 +173,7 @@ def eval(args):
     if not os.path.exists(args.log_path):
         os.makedirs(args.log_path)
     prediction_path = args.log_path + f'/predictions_streaming_{str(args.split)}.txt'
-    #result_path = args.log_path + '/result_stream.txt'
     print('prediction_path: ', prediction_path)
-    #print('result_path: ', result_path)
-    #if args.total_split > 1 and args.split == -1:  # merge all outputs
-        #metrics = calculate_result(args)
-        #with open(result_path, 'w') as f:
-            #json.dump(metrics, f)
-        #return
     disable_torch_init()
     print('torch.cuda.is_available(): ', torch.cuda.is_available())
     # tokenizer, model, context_len = None, None, None
@@ -433,11 +420,6 @@ def eval(args):
                 raise
             errors.append(id)
     print('errors', errors)
-
-    #if args.total_split == 1:  # merge all outputs
-        #metrics = calculate_result(args)
-        #with open(result_path, 'w') as f:
-            #json.dump(metrics, f)
 
 def calculate_result(args):
     logs = []

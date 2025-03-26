@@ -14,13 +14,12 @@ import torch
 import json
 import numpy as np
 from tqdm import tqdm
-from revisionllm.model.builder import load_pretrained_model
-from revisionllm.utils import disable_torch_init
-from revisionllm.inference import inference
-from revisionllm.model.adapter.tensor_utils import pad_sequences_1d
-from revisionllm.eval.similarity import _topk_pooling
-from revisionllm.uncertainty.funs_get_feature_X import get_entropy_statistics
-
+from vtimellm.model.builder import load_pretrained_model
+from vtimellm.utils import disable_torch_init
+from vtimellm.inference import inference
+from vtimellm.model.adapter.tensor_utils import pad_sequences_1d
+from vtimellm.eval.similarity import _topk_pooling
+from vtimellm.uncertainty.funs_get_feature_X import get_entropy_statistics
 random.seed(42)
 try:
     from torchvision.transforms import InterpolationMode
@@ -33,15 +32,16 @@ except ImportError:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--clip_path", type=str, default="/home/stud/user/VTimeLLM/checkpoints/clip/ViT-L-14.pt")
-    parser.add_argument("--model_base", type=str, default="/home/stud/user/.cache/huggingface/hub/models--lmsys--vicuna-7b-v1.5/snapshots/de56c35b1763eaae20f4d60efd64af0a9091ebe5")
-    parser.add_argument("--pretrain_mm_mlp_adapter", type=str, default=None)#"/home/stud/user/VTimeLLM/checkpoints/revisionllm-vicuna-v1-5-7b-stage1/mm_projector.bin")
-    parser.add_argument("--stage2", type=str, default='/home/stud/user/VTimeLLM/checkpoints/revisionllm-vicuna-v1-5-7b-stage2')
+    parser.add_argument("--clip_path", type=str, default="/home/stud/hannan/VTimeLLM/checkpoints/clip/ViT-L-14.pt")
+    parser.add_argument("--model_base", type=str, default="/home/stud/hannan/.cache/huggingface/hub/models--lmsys--vicuna-7b-v1.5/snapshots/de56c35b1763eaae20f4d60efd64af0a9091ebe5")
+    parser.add_argument("--pretrain_mm_mlp_adapter", type=str, default=None)#"/home/stud/hannan/VTimeLLM/checkpoints/vtimellm-vicuna-v1-5-7b-stage1/mm_projector.bin")
+    parser.add_argument("--pretrain_clip_adapter", type=str, default=None)#"/home/stud/hannan/VTimeLLM/checkpoints/vtimellm-vicuna-v1-5-7b-stage1/mm_projector.bin")
+    parser.add_argument("--stage2", type=str, default='/home/stud/hannan/VTimeLLM/checkpoints/vtimellm-vicuna-v1-5-7b-stage2')
     parser.add_argument("--stage3", type=str, default=None)
-    parser.add_argument("--data_path", type=str, default='/nfs/data3/user/mad_data_for_cone/data/mad_ori_data/MAD_val.json')
-    parser.add_argument("--feat_folder", type=str, default='/nfs/data3/user/mad_data_for_cone/offline_lmdb/CLIP_L14_frames_features_5fps')
+    parser.add_argument("--data_path", type=str, default='/nfs/data3/hannan/mad_data_for_cone/data/mad_ori_data/MAD_val.json')
+    parser.add_argument("--feat_folder", type=str, default='/nfs/data3/hannan/mad_data_for_cone/offline_lmdb/CLIP_L14_frames_features_5fps')
     parser.add_argument("--task", type=str, default='grounding', choices=['all', 'grounding', 'captioning'])
-    parser.add_argument("--log_path", type=str, default='/home/stud/user/VTimeLLM/checkpoints/revisionllm-vicuna-v1-5-7b-stage2')
+    parser.add_argument("--log_path", type=str, default='/home/stud/hannan/VTimeLLM/checkpoints/vtimellm-vicuna-v1-5-7b-stage2')
     parser.add_argument("--debug_window", type=int, default=125)
     parser.add_argument("--num_frames", type=int, default=250)
     parser.add_argument("--mlp_adapter", type=bool, default=False)
@@ -56,55 +56,60 @@ def parse_args():
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--split", type=int, default=0)
     parser.add_argument("--total_split", type=int, default=1)
-    parser.add_argument("--topk_pool", type=bool, default=False)
-    parser.add_argument("--adapter_input_dim", type=int, default=256)
+    parser.add_argument("--topk_pool", type=bool, default=True)
+    parser.add_argument("--adapter_input_dim", type=int, default=768)
     parser.add_argument("--feature_fps", type=float, default=5)
     parser.add_argument("--load_ckp", type=bool, default=False)
     parser.add_argument("--mad_prompt", type=str, default='mad_grounding')
     parser.add_argument("--debug", type=bool, default=False)
-    parser.add_argument("--vis_feat_storage", type=str, default='lmdb', choices=['lmdb', 'npy', 'pth'])
     parser.add_argument("--clip_adapter", type=bool, default=False)
     parser.add_argument("--clip_adapter_text", type=bool, default=False)
-    parser.add_argument("--clip_adapter_feature", type=bool, default=False)
+    parser.add_argument("--vis_feat_storage", type=str, default='lmdb', choices=['lmdb', 'npy', 'pth'])
+    parser.add_argument("--score", type=str, default='mean_entropy', choices=['cosine_sim', 'max_entropy', 'mean_entropy'])
+    parser.add_argument("--clip_adapter_feature", type=str, default='temporal') #'cls', "all", "alternate"
     parser.add_argument("--hierarchy", type=bool, default=False)
-    parser.add_argument("--score", type=str, default='mean_entropy',
-                        choices=['cosine_sim', 'max_entropy', 'mean_entropy'])
     parser.add_argument("--score_merge", type=str, default='multiply', choices=['add', 'multiply'])
     parser.add_argument("--normalize", type=bool, default=True)
-    parser.add_argument("--hierarchy_all", type=bool, default=False)
-    parser.add_argument("--high_res_log_path", type=str,
-                        default=None)  # '/home/stud/user/VTimeLLM/checkpoints/BEST-revisionllm-vicuna-v1-5-7b-msrvtt-100-3f-8-fixed_lr1e-4_wrm.03-neg-window-11-b32-g1-e5/new/max_entropy_mul_norm/predictions_streaming_0.txt')
-
+    parser.add_argument("--skip_small_videos", type=bool, default=True)
+    parser.add_argument("--baseline", type=bool, default=False)
+    parser.add_argument("--plus_baseline", type=bool, default=False)
     args = parser.parse_args()
     return args
 
-def iou(outputs, gt, num_frames_clip, num_frames_video):
+def iou(outputs, gt, num_frames_clip, num_frames_video, scores, plus_baseline):
     # return frames, ious
     frames = []
+    filter_scores = []
     clip_frames = {}
     for i, output in enumerate(outputs):
+        if plus_baseline and i==len(outputs)-1:
+            i=0
         matches = re.search(r"(\d+) (to|and) (\d+)", output)
         if matches:
             from_number = float(matches.group(1))
             to_number = float(matches.group(3))
+            if from_number==num_frames_clip-1 and to_number==num_frames_clip-1:
+                continue
             if from_number==to_number:
                 from_number = max(0, from_number-1)
                 to_number = min(num_frames_video, to_number+1)
-            clip_frames[i] = (int(from_number), int(to_number))
+            clip_frames[i] = (int(from_number),int(to_number))
             from_number = int(i * num_frames_clip // 2 + from_number)
             to_number = int(i * num_frames_clip // 2 + to_number)
-            frames.append((from_number, to_number))
+            frames.append((from_number,to_number))
+            if len(scores)>0:
+                filter_scores.append(scores[i])
 
-    s, e = min(gt), max(gt)
+    s, e = gt
     ious = []
     for frame in frames:
-        f, t = frame#frame[0]/num_frames_video, frame[1]/num_frames_video
+        f, t = frame[0]/num_frames_video, frame[1]/num_frames_video
         intersection = max(0, min(t, e) - max(f, s))
-        # union = max(t, e) - min(f, s)
-        # iou = round(intersection / union, 2)
-        ious.append(intersection)
+        union = max(t, e) - min(f, s)
+        iou = round(intersection / union, 2)
+        ious.append(iou)
 
-    return clip_frames, [1] if sum(ious)>0 else [0]  # return frames, iou
+    return clip_frames, ious, filter_scores  # return frames, iou
 
 
 def write_log(log_path, video_id, task, query_id, answer, info=None):
@@ -126,29 +131,12 @@ questions = {
     'captioning': ['Could you please describe the events in the video in detail? Be specific about the activities of individuals, their surroundings, and interactions with others. The output should be in JSON format, structured as follows: {"event": "xx", "timestamps": "from xx to xx"}.']
 }
 
-def get_ground_truth_windows(start, end, duration):
-    clip_len = 0.2
-    start = start / clip_len
-    end = end / clip_len
-    slide_window_size = int(900 / 2)
-    matched_subvideo_id_list = list(range(math.floor(start / slide_window_size),
-                                     math.ceil(end / slide_window_size) + 1))
-    duration = duration / clip_len
-    duration = math.ceil(duration / slide_window_size) + 1
-    return matched_subvideo_id_list, duration
 
 def eval(args):
     if not os.path.exists(args.log_path):
         os.makedirs(args.log_path)
     prediction_path = args.log_path + f'/predictions_streaming_{str(args.split)}.txt'
-    #result_path = args.log_path + '/result_stream.txt'
     print('prediction_path: ', prediction_path)
-    #print('result_path: ', result_path)
-    #if args.total_split > 1 and args.split == -1:  # merge all outputs
-        #metrics = calculate_result(args)
-        #with open(result_path, 'w') as f:
-            #json.dump(metrics, f)
-        #return
     disable_torch_init()
     print('torch.cuda.is_available(): ', torch.cuda.is_available())
     # tokenizer, model, context_len = None, None, None
@@ -187,11 +175,6 @@ def eval(args):
             js = [(k['query'], k) for k in js]
         else: #MAD_train.json
             js = [(id, item ) for id, item in js.items()]
-    for id_item in js:
-        id, item = id_item
-        item['clip_id'] = id
-        item['video_id'] = id
-        item["timestamps"], item["duration"] = get_ground_truth_windows(item["timestamps"][0], item["timestamps"][1], item["duration"])
     # features = torch.zeros((args.num_frames, 768), dtype=torch.float16)
     bin = len(js) // args.total_split
     items = js[args.split * bin:] if args.split == args.total_split - 1 else js[args.split * bin: (args.split + 1) * bin]
@@ -206,11 +189,12 @@ def eval(args):
             continue
         try:
             movie = data['movie'] if 'movie' in data else data['clip_id']
+            movie = data['query_id'] if 'val_frame' in args.feat_folder else movie
             if args.vis_feat_storage == 'lmdb':  # because chapters data is enormous I use npy directly for now
                 dump = appearance_visual_txn.get(movie.encode())
                 with io.BytesIO(dump) as reader:
                     img_dump = np.load(reader, allow_pickle=True)
-                    features = img_dump['features'] if 'features' in img_dump else img_dump['memory_global']
+                    features = img_dump['features']
             else:
                 path = os.path.join(args.feat_folder, movie + '.npy')
                 features = np.load(path)
@@ -227,20 +211,31 @@ def eval(args):
             gt_len = math.ceil(data['timestamps'][1] - data['timestamps'][0])
 
             if 'movie_duration' in data and data['movie_duration'] <= args.debug_window:
-                continue
+                if args.skip_small_videos:
+                    continue
+                else:
+                    sampled_indices = np.linspace(0, features.shape[0]-1, args.num_frames, dtype=np.int32)
+                    features = features[sampled_indices]
+
+            if args.baseline:
+                sampled_indices = np.linspace(0, features.shape[0]-1, int(args.debug_window * args.feature_fps), dtype=np.int32)
+                features = features[sampled_indices]
 
             ctx_l = len(features)
             assert ctx_l > 0, ctx_l
             clip_length = args.debug_window * args.feature_fps
             num_window = math.ceil(ctx_l / (clip_length//2)) - 1
-            windowidx = list(range(num_window))
+            windowidx = [1] if args.baseline else list(range(num_window))
             clip_feats = []
-            times = []
             for i in windowidx:
                 start = max(i * clip_length//2, 0)
                 end = min(i * clip_length//2 + clip_length, ctx_l-1)
-                times.append((start, end))
                 sampled_indices = np.linspace(start, end, args.num_frames, dtype=np.int32)
+                clip_feat = features[sampled_indices]
+                clip_feats.append(clip_feat)
+
+            if args.plus_baseline:
+                sampled_indices = np.linspace(0, features.shape[0]-1, args.num_frames, dtype=np.int32)
                 clip_feat = features[sampled_indices]
                 clip_feats.append(clip_feat)
 
@@ -260,8 +255,8 @@ def eval(args):
                 if args.q_feat_dir is not None:
                     query_feats = query_feats.to(torch.float32)
                     query_cls_feats = query_cls_feats.to(torch.float32)
-            if args.q_feat_dir is not None:
-                query_feats = pad_sequences_1d(query_feats[None,].repeat(features.shape[0],1,1), dtype=query_feats.dtype, device=query_feats.device, fixed_length=None)
+            # if args.q_feat_dir is not None:
+            #     query_feats = pad_sequences_1d(query_feats[None,].repeat(features.shape[0],1,1), dtype=query_feats.dtype, device=query_feats.device, fixed_length=None)
 
             if features is None:
                 print(f'Can not find video {movie}')
@@ -279,66 +274,72 @@ def eval(args):
                     sentence = sentence[:-1]
                 # sentence = data['query']
                 # for query_id, query in enumerate(questions['grounding']):
-                query = 'During which video clips can we see {}?'#questions[args.mad_prompt]
+                query = questions[args.mad_prompt]
                 answers = []
-                mean_entropy = []
-                max_entropy = []
+                score_cos = []
+                scores_entropy = []
                 for i in range(math.ceil(features.shape[0]/batch)):
                     start = i * batch
                     end = min(start + batch, features.shape[0])
-
                     feat = features[start:end]
-                    answer, model_output = inference(model, feat, query_feats, "<video>\n" + query.format(sentence), tokenizer, return_list=True)
+                    if args.q_feat_dir is not None:# and i==0:
+                        query_feats_temp = pad_sequences_1d(query_feats[None,].repeat(feat.shape[0],1,1), dtype=query_feats.dtype, device=query_feats.device, fixed_length=None)
+                    answer, model_output = inference(model, feat, query_feats_temp, "<video>\n" + query.format(sentence), tokenizer, return_list=True)
+                    # print("answer: ", answer)
+                    # for a in answer:
                     answers.extend(answer)
+                    if args.score=='max_entropy':
+                        entropy = get_entropy_statistics(torch.cat([a[:, None] for a in model_output['scores']], 1), 0,
+                                                         model_output['scores'][0].shape[1])
+                        scores_entropy.extend([e[0].item() for e in entropy])
+                    elif args.score=='mean_entropy':
+                        entropy = get_entropy_statistics(torch.cat([a[:, None] for a in model_output['scores']], 1), 0,
+                                                         model_output['scores'][0].shape[1])
+                        scores_entropy.extend([e[2].item() for e in entropy])
                     #break
-                    if args.score == 'max_entropy':
-                        entropy = get_entropy_statistics(torch.cat([a[:, None] for a in model_output['scores']], 1), 0,
-                                                         model_output['scores'][0].shape[1])
-                        max_entropy.extend([1/e[0].item() for e in entropy])
-                    elif args.score == 'mean_entropy':
-                        entropy = get_entropy_statistics(torch.cat([a[:, None] for a in model_output['scores']], 1), 0,
-                                                         model_output['scores'][0].shape[1])
-                        mean_entropy.extend([1/e[2].item() for e in entropy])
-
-                if args.normalize:
-                    if len(max_entropy)>0:
-                        m_s = max(max_entropy)
-                        max_entropy = [e/m_s for e in max_entropy]
-                    if len(mean_entropy)>0:
-                        m_s = max(mean_entropy)
-                        mean_entropy = [e/m_s for e in mean_entropy]
-
+                # if 'entropy' in args.score:
+                #     eps = 0.00001
+                #     max_entropy = log(32000, 2)
+                #     scores_ = [-s / max_entropy + eps for s in scores]
                 duration = data['movie_duration'] if 'movie_duration' in data else data['duration']
-                # gt = (timestamps[0] / duration, timestamps[1] / duration)
+                gt = (timestamps[0] / duration, timestamps[1] / duration)
                 num_frames_video = int(duration * args.num_frames / args.debug_window)
-                frames, ious = iou(answers, timestamps, args.num_frames, num_frames_video)
-                # scores=ious
-
-                # for k,v in frames.items():
-                #     proposal_feat = features[k][v[0]:v[1]+1]
-                #     proposal_features = proposal_feat / proposal_feat.norm(dim=0, keepdim=True)
-                #     if args.topk_pool:
-                #         proposal_features = _topk_pooling(query_cls_feats[None], proposal_features[None], min(proposal_features.shape[0], 3))[0]
-                #         score = torch.einsum('bd,d->b', proposal_features, query_cls_feats)
-                #     else:
-                #         score = torch.einsum('bd,d->b', proposal_features, query_cls_feats).mean()
-                #     scores.append(score.item())
-
-                write_log(prediction_path, movie, 'grounding', id, answers, info={'gt':timestamps,
-                                                                                  'frames': frames,
-                                                                                  'iou': ious,
-                                                                                  'mean_entropy': mean_entropy,
-                                                                                  'max_entropy': max_entropy})
+                frames, ious, scores_entropy = iou(answers, gt, args.num_frames, num_frames_video, scores_entropy, args.plus_baseline)
+                # if args.score == 'cosine_sim':
+                for k,v in frames.items():
+                    proposal_feat = features[k][v[0]:v[1]+1]
+                    proposal_features = proposal_feat / proposal_feat.norm(dim=0, keepdim=True)
+                    if args.topk_pool:
+                        proposal_features = _topk_pooling(query_cls_feats[None], proposal_features[None], min(proposal_features.shape[0], 3))[0]
+                        score = torch.einsum('bd,d->b', proposal_features, query_cls_feats)
+                    else:
+                        score = torch.einsum('bd,d->b', proposal_features, query_cls_feats).mean()
+                    # if 'entropy' in args.score:
+                    #     scores[i] *= score.item()
+                    # else:
+                    score_cos.append(score.item())
+                if args.normalize:
+                    if len(score_cos)>0:
+                        m_s = max(score_cos)
+                        score_cos = [e/m_s for e in score_cos]
+                    if len(scores_entropy)>0:
+                        m_s = max(scores_entropy)
+                        scores_entropy = [e/m_s for e in scores_entropy]
+                if 'entropy' in args.score:
+                    if args.score_merge == 'add':
+                        scores = [a - b for a, b in zip(score_cos, scores_entropy)]
+                    elif args.score_merge == 'multiply':
+                        scores = [a / b for a, b in zip(score_cos, scores_entropy)]
+                    else:
+                        scores = [-e for e in scores_entropy]
+                else:
+                    scores = score_cos
+                write_log(prediction_path, movie, 'grounding', id, answers, info={'iou': ious, 'scores': scores})
         except:
-            if args.debug:
-                raise
+            # if args.debug:
+            #     raise
             errors.append(id)
     print('errors', errors)
-
-    #if args.total_split == 1:  # merge all outputs
-        #metrics = calculate_result(args)
-        #with open(result_path, 'w') as f:
-            #json.dump(metrics, f)
 
 def calculate_result(args):
     logs = []
