@@ -5,7 +5,7 @@ Tanveer Hannan Md Mohaiminul Islam  Jindong Gu Thomas Seidl Gedas Bertasius
 
 Accepted by **CVPR 2025**
 
-[//]: # ([[Website]&#40;https://sites.google.com/view/rgnet&#41;] [[Paper]&#40;https://arxiv.org/pdf/2312.06729&#41;])
+[[Website](https://sites.google.com/view/revisionllm)] [[Paper](https://arxiv.org/pdf/2411.14901)]
 
 [//]: # (Official PyTorch implementation of the paper "RGNet: A Unified Clip Retrieval and Grounding Network for Long Videos".)
 
