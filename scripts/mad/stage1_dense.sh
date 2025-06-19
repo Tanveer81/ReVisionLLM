@@ -39,7 +39,7 @@ deepspeed --master_port $MASTER_PORT revisionllm/train/train_mem.py \
     --version v1 \
     --data_path data/mad/mad_stage2_fixed_prompt.json \
     --feat_folder data/mad/ \
-    --pretrain_mm_mlp_adapter checkpoints/pretrain/mm_projector.bin \
+    --pretrain_mm_mlp_adapter vtimellm/checkpoints/vtimellm-vicuna-v1-5-7b-stage1/mm_projector.bin \
     --stage2_path checkpoints/vtimellm-vicuna-v1-5-7b-stage2 \
     --output_dir $OUT_DIR \
     --bf16 True \
