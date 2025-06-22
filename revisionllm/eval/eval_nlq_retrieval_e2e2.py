@@ -416,8 +416,8 @@ def eval(args):
                                                                                   'max_entropy': max_entropy,
                                                                                   'hierarchy_zooms': hierarchy_zooms})
         except:
-            if args.debug:
-                raise
+            #if args.debug:
+                #raise
             errors.append(id)
     print('errors', errors)
 
