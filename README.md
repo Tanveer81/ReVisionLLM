@@ -10,10 +10,6 @@ Accepted by **CVPR 2025**
 [//]: # (Official PyTorch implementation of the paper "RGNet: A Unified Clip Retrieval and Grounding Network for Long Videos".)
 
 
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/revisionllm-recursive-vision-language-model/natural-language-moment-retrieval-on-mad)](https://paperswithcode.com/sota/natural-language-moment-retrieval-on-mad?p=revisionllm-recursive-vision-language-model)
-
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/revisionllm-recursive-vision-language-model/language-based-temporal-localization-on)](https://paperswithcode.com/sota/language-based-temporal-localization-on?p=revisionllm-recursive-vision-language-model)
-
 ---
 
 ## :loudspeaker: Latest Updates
